@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from config import *
 from dataset import *
 from exporter import save_model
@@ -12,18 +13,18 @@ from keras.callbacks import ReduceLROnPlateau, EarlyStopping
 np.random.seed(1)
 
 if not perform_validation:
-	print('Validation mode disabled')
-	subjects_train += subjects_valid
+    print('Validation mode disabled')
+    subjects_train += subjects_valid
 else:
-	print('Validation mode enabled')
+    print('Validation mode enabled')
 
 # Load training set
 hand_data = []
 mocap_data = []
 for subject in subjects_train:
-	hand_data_, mocap_data_ = load_all('data/' + subject)
-	hand_data.append(hand_data_)
-	mocap_data.append(mocap_data_)
+    hand_data_, mocap_data_ = load_all('data/' + subject)
+    hand_data.append(hand_data_)
+    mocap_data.append(mocap_data_)
 hand_data = pd.concat(hand_data)
 mocap_data = pd.concat(mocap_data)
 
@@ -41,10 +42,6 @@ positions_hand, orientations_hand, positions_mocap = pre_process(
 hand = load_hand_template('data/hand.csv', all_markers)
 print('Hand Template:', hand.shape)
 
-
-positions_hand, orientations_hand, positions_mocap = pre_process(
-    positions_hand, orientations_hand, positions_mocap)
-
 # If enabled, leave out a portion of the training set to validate the model
 positions_mocap_tr = positions_mocap
 
@@ -57,14 +54,14 @@ model.add(Dense(len(all_markers) * 3, activation='linear'))
 
 # The learning rate is halved if the training error has not improved over the last 5 epochs
 lr_callback = ReduceLROnPlateau(monitor='loss', factor=0.5, patience=5,
-                                verbose=1, mode='auto', epsilon=1e-7, cooldown=0, min_lr=0)
+                                verbose=1, mode='auto', min_delta=1e-7, cooldown=0, min_lr=0)
 
 # Stops the training process upon convergence
 stop_callback = EarlyStopping(monitor='loss', min_delta=1e-7, patience=11, verbose=1, mode='auto')
 
 batch_size = 32
 
-model.compile(loss='mean_squared_error', optimizer=Adam(lr=0.001), metrics=['mae'])
+model.compile(loss='mean_squared_error', optimizer=Adam(learning_rate=0.001), metrics=['mae'])
 model.summary()
 
 def extract_features(mocap_sample, occlusions):
@@ -86,7 +83,6 @@ def extract_features(mocap_sample, occlusions):
     x[occluded] = 0
 
     return x.flatten(), y.flatten()
-
 
 def generate_minibatch(X, min_occlusions, max_occlusions):
     '''Procedure for real-time minibatch creation and dataset augmentation.
@@ -123,44 +119,44 @@ def generate_minibatch(X, min_occlusions, max_occlusions):
         yield (X_batch, Y_batch)
         
 def evaluate_model(name, X, min_occlusions, max_occlusions):
-    validation_steps = X.shape[0]//batch_size
-    va_score = model.evaluate_generator(
+    validation_steps = X.shape[0] // batch_size
+    va_score = model.evaluate(
                 generate_minibatch(X, min_occlusions, max_occlusions),
                 steps=validation_steps)
     print('--------',name,'--------')
     print('RMSE (centimeters):', np.sqrt(va_score[0])*100)
     print('MAE (centimeters):', va_score[1]*100)
-        
-        
+
 try:
-    model.fit_generator(generate_minibatch(positions_mocap_tr, -1, -1),
-                    steps_per_epoch=positions_mocap_tr.shape[0]//batch_size,
-                    epochs=1000,
-                    verbose=2,
-                    #validation_data=generate_minibatch(positions_mocap_va, 1, 3),
-                    #validation_steps=positions_mocap_va.shape[0]//batch_size,
-                    callbacks=[lr_callback, stop_callback])
+    model.fit(
+        generate_minibatch(positions_mocap_tr, -1, -1),
+        steps_per_epoch=positions_mocap_tr.shape[0]//batch_size,
+        epochs=1000,
+        verbose=2,
+        #validation_data=generate_minibatch(positions_mocap_va, 1, 3),
+        #validation_steps=positions_mocap_va.shape[0]//batch_size,
+        callbacks=[lr_callback, stop_callback])
 except KeyboardInterrupt:
-        # Do not throw away the model in case the user stops the training process
-        pass
-    
+    # Do not throw away the model in case the user stops the training process
+    pass
+
 # Save the weights of the neural network to file
 save_model(model, 'marker_model.bin')
 
 # Perform validation (if enabled)
 if perform_validation:
-	print('***** Performing validation *****')
-	test = subjects_valid
+    print('***** Performing validation *****')
+    test = subjects_valid
 else:
-	print('***** Evaluating loss on the test set *****')
-	test = subjects_test
-	
+    print('***** Evaluating loss on the test set *****')
+    test = subjects_test
+    
 hand_data_te = []
 mocap_data_te = []
 for subject in test:
-	hand_data_, mocap_data_ = load_all('data/' + subject)
-	hand_data_te.append(hand_data_)
-	mocap_data_te.append(mocap_data_)
+    hand_data_, mocap_data_ = load_all('data/' + subject)
+    hand_data_te.append(hand_data_)
+    mocap_data_te.append(mocap_data_)
 hand_data_te = pd.concat(hand_data_te)
 mocap_data_te = pd.concat(mocap_data_te)
 
@@ -168,10 +164,10 @@ positions_mocap_te = extract_columns(mocap_data_te, all_markers, 'pos')
 positions_hand_te = extract_columns(hand_data_te, hand_features, 'pos')
 orientations_hand_te = extract_columns(hand_data_te, hand_features, 'rot')
 if not perform_validation:
-	print('--- Test set ---')
+    print('--- Test set ---')
 else:
-	print('--- Validation set ---')
-	
+    print('--- Validation set ---')
+    
 print('Hand:', positions_hand_te.shape, orientations_hand_te.shape)
 print('Mocap:', positions_mocap_te.shape)
 
