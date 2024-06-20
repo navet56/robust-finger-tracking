@@ -114,7 +114,7 @@ model.add(Dropout(0.1))
 model.add(Dense(200, activation='relu'))
 model.add(Dense(Y_tr.shape[1], activation='linear'))
 
-opt = Adam(lr=0.001)
+opt = Adam(learning_rate=0.001)
 
 # The learning rate is halved if the training error has not improved over the last 5 epochs
 lr_callback = ReduceLROnPlateau(monitor='loss', factor=0.5, patience=5,
